@@ -1,0 +1,66 @@
+# Data sources for the Cache la Poudre watershed map.
+#
+# Endpoints below were verified reachable on 2026-07-31. `snapshot` pins the
+# date the cache was last refreshed so a build is reproducible; bump it
+# deliberately, not incidentally.
+
+snapshot: 2026-07-31
+
+# Canonical storage CRS for everything in data/derived/. Both renderers
+# reproject from here — the print path to EPSG:26913, the web path to 3857.
+canonical_crs: EPSG:4326
+
+# The subject of the map. Note states: CO,WY — the basin crosses the state
+# line in the North Fork headwaters. Any clip to Colorado is wrong.
+basin:
+  huc8: "10190007"
+  name: Cache La Poudre
+  area_sqkm: 4896.47
+  states: [CO, WY]
+
+sources:
+
+  # USGS Watershed Boundary Dataset. Primary source for the basin outline and
+  # all subdivision tiers. Public domain. 53 HUC12s nest inside 10190007.
+  wbd:
+    base: https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer
+    layers:
+      huc8: 4
+      huc10: 5
+      huc12: 6
+    attribution: USGS Watershed Boundary Dataset
+
+  # Hydrologically-derived drainage upstream of a gage. Used as a cross-check
+  # against the WBD polygon, not as the map's subject — the two disagree, and
+  # the disagreement is informative.
+  nldi:
+    base: https://api.water.usgs.gov/nldi/linked-data
+    check_gage: USGS-06752500  # Cache la Poudre at Greeley
+    attribution: USGS Network-Linked Data Index
+
+  # 3DEP elevation, for the hillshade that both renderers share.
+  # Basin relief runs ~1,400 m at the South Platte confluence to >3,900 m
+  # in the Rawah and Never Summer ranges.
+  elevation:
+    dataset: 3DEP 1/3 arc-second
+    attribution: USGS 3DEP
+
+  # CSU Geospatial Centroid, ArcGIS org KNdRU5cN6ENqCTjk, owner nvogel1_CSUrams.
+  # Public, EPSG:26913. Valued for the curated local layers, NOT for the
+  # boundary: CLP_HUC8 is a 2014 WBD snapshot downloaded in 2020 and contains
+  # 6 polygons (a study-area extract), so it needs filtering and is stale.
+  csu:
+    base: https://services1.arcgis.com/KNdRU5cN6ENqCTjk/arcgis/rest/services
+    layers:
+      canals: CLP_canals
+      water_districts: CLP_waterDistricts
+      streams_24k: CLP_streams24k
+      streams_100k: CLP_streams100k
+      waterbodies: CLP_waterBodies
+      wetlands: CLP_wetlands
+      precip_normals: CLP_AvePrecip1981_2010
+      femafloodway: CLP_FEMAfloodway
+      landcover: CLP_CoMaP_v20190306
+    attribution: >-
+      USDA/NRCS National Geospatial Center of Excellence,
+      via CSU Geospatial Centroid

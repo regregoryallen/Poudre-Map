@@ -1,0 +1,21 @@
+# Downloaded and derived geodata — regenerable via `make data`, too large to track
+data/cache/
+data/derived/
+out/
+*.pmtiles
+*.tif
+*.tiff
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
