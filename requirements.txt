@@ -1,8 +1,10 @@
-# Stage 1–2 (fetch, build). Terrain and rendering deps get added with those
-# stages: rasterio/rioxarray for terrain.py, matplotlib for render.py.
+# Vector stack for fetch/build/tiles, raster stack for terrain, matplotlib for
+# the QA and comparison plots (and, later, render.py).
 geopandas==1.1.4
 pyogrio==0.13.0
 pyproj==3.7.2
 shapely==2.1.2
 requests==2.34.2
 PyYAML==6.0.3
+rasterio==1.5.0
+matplotlib==3.11.1

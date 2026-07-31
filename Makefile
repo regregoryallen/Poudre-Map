@@ -1,7 +1,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: help venv vendor fetch build data qa tiles serve deploy all clean-derived clean-cache
+.PHONY: help venv vendor fetch build data qa terrain terrain-compare tiles serve deploy all clean-derived clean-cache clean-terrain
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -29,6 +29,12 @@ vendor: ## re-fetch the browser libs into web/vendor (not tracked in git)
 qa: ## unstyled diagnostic plot → out/qa.png
 	$(PY) -u src/qa.py
 
+terrain: ## stage 2b — 3DEP → DEM + shading variants (windowed download, ~2 min)
+	$(PY) -u src/terrain.py
+
+terrain-compare: ## side-by-side of the shading variants → out/terrain_variants.png
+	$(PY) -u src/terrain_compare.py
+
 tiles: ## stage 3a — pack derived GeoJSON into web/poudre.pmtiles
 	$(PY) -u src/tiles.py
 
@@ -45,3 +51,6 @@ clean-derived: ## drop derived output, keep the download cache
 
 clean-cache: ## drop the download cache; next fetch re-downloads everything
 	rm -rf data/cache/*
+
+clean-terrain: ## drop the DEM and shading rasters
+	rm -rf data/terrain/*

@@ -46,7 +46,7 @@ Three stages. The first two are shared; only rendering diverges.
 | `qa.py` | Unstyled diagnostic plot. Not cartography — geometry checking. | `out/qa.png` | done |
 | `tiles.py` | `tippecanoe` → single static vector-tile file. | `web/poudre.pmtiles` | done |
 | `web/index.html` | MapLibre viewer. No build step, no framework. | — | done |
-| `terrain.py` | 3DEP → hillshade. Full-res for print, downsampled for web. | GeoTIFF | todo |
+| `terrain.py` | 3DEP → DEM + shading variants, EPSG:26913. | `data/terrain/*.tif` | done |
 | `render.py` | Static cartography in EPSG:26913. | PNG / PDF / SVG | todo |
 
 ```bash
@@ -109,6 +109,37 @@ still looks like a basin. So the pipeline uses NHDPlus HR for flowlines
 and `build.py` hard-fails on the Wyoming area, the HUC12 count, the specific
 WY-designated subwatersheds, and any basin-wide layer with no features north of
 41°N. Expected values live in `expectations:` in `config/sources.yml`.
+
+## Terrain
+
+`terrain.py` builds the relief from USGS 3DEP 1/3 arc-second elevation. The six
+1-degree tiles covering the padded basin total ~2 GB, but they are proper COGs
+(tiled 512×512, with overviews), so the script window-reads only what
+intersects the basin over `/vsicurl` and never downloads the rest. Output is
+EPSG:26913 at 20 m — an 11×17 print at 300 dpi needs about 34 m, so that has
+room to spare.
+
+In-basin elevation runs **1,389–4,132 m: 2,743 m of relief.**
+
+Three shading variants are produced because the basin has two terrains, and
+`terrain_compare.py` renders them side by side over both. The comparison
+settles it, though not the way the question was posed:
+
+**No shading variant rescues the plains, because there is nothing there to
+shade.** East of the canyon mouth the ground is genuinely flat, and single-sun
+and multidirectional relief both go to blank grey. That is not a tuning
+failure — it is the terrain reporting itself accurately. The plains have to be
+carried by a different layer (the canal network already does this well), not by
+a better hillshade.
+
+So the choice is only about the mountains and about what the relief has to
+coexist with:
+
+| Variant | Use |
+|---|---|
+| `hillshade` | Strongest contrast. Fights thin overlaid linework. |
+| `hillshade_multi` | Softer, holds detail on all aspects. Best under vectors. |
+| `hypsometric` | Only variant that gives the plains an identity. Best standalone. |
 
 ## Canals are not streams
 
