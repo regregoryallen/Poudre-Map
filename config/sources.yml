@@ -38,6 +38,32 @@ sources:
     check_gage: USGS-06752500  # Cache la Poudre at Greeley
     attribution: USGS Network-Linked Data Index
 
+  # NHDPlus High Resolution. Primary flowline source, chosen over the CSU
+  # stream layers specifically because it has national coverage and therefore
+  # includes the Wyoming headwaters (see the csu note below). `streamorde`
+  # drives the detail tiers.
+  #
+  # This service is slow — a bare bbox count query can exceed 90s — so the
+  # client uses long timeouts and retries. min_order is applied at fetch time
+  # to keep the payload sane; lower it and re-fetch if you want the capillaries.
+  #
+  # out_fields is not optional tuning. The flowline layer has 84 columns of
+  # NHDPlus routing and flow-model attributes; requesting `*` makes each page
+  # slow enough that the fetch appears hung. Naming the handful we use takes a
+  # page to ~4s. Add fields here rather than reverting to `*`.
+  nhdplus_hr:
+    base: https://hydro.nationalmap.gov/arcgis/rest/services/NHDPlus_HR/MapServer
+    layers:
+      flowlines: 3   # NetworkNHDFlowline
+      waterbodies: 9
+      gages: 0       # NHDPlusGage
+    out_fields:
+      flowlines: permanent_identifier,gnis_name,streamorde,ftype,lengthkm,totdasqkm,slope
+      waterbodies: permanent_identifier,gnis_name,areasqkm,elevation,ftype
+      gages: sourceid,station_nm,state,dasqmi,referencegage
+    min_order: 2
+    attribution: USGS NHDPlus High Resolution
+
   # 3DEP elevation, for the hillshade that both renderers share.
   # Basin relief runs ~1,400 m at the South Platte confluence to >3,900 m
   # in the Rawah and Never Summer ranges.
@@ -49,13 +75,24 @@ sources:
   # Public, EPSG:26913. Valued for the curated local layers, NOT for the
   # boundary: CLP_HUC8 is a 2014 WBD snapshot downloaded in 2020 and contains
   # 6 polygons (a study-area extract), so it needs filtering and is stale.
+  #
+  # !! CRITICAL: these layers are Colorado-only. CLP_streams24k has 7,661
+  # features and ZERO north of 41°N — it is Colorado Division of Wildlife data
+  # and stops dead at the state line. Using it as the flowline source would
+  # silently blank out the Wyoming headwaters: 311 km², 6.4% of the basin,
+  # including the upper Dale Creek and Boxelder Creek drainages. (Seven HUC12s
+  # carry a WY designation and total ~815 km², but most of that area lies south
+  # of the line — the actual Wyoming land is the 311 km² figure.)
+  # Any CSU layer used here must be assumed CO-only until proven otherwise;
+  # see build.py, which asserts on this.
   csu:
     base: https://services1.arcgis.com/KNdRU5cN6ENqCTjk/arcgis/rest/services
+    colorado_only: true
     layers:
       canals: CLP_canals
       water_districts: CLP_waterDistricts
-      streams_24k: CLP_streams24k
-      streams_100k: CLP_streams100k
+      streams_24k: CLP_streams24k       # CO-only — do not use as flowline source
+      streams_100k: CLP_streams100k     # CO-only
       waterbodies: CLP_waterBodies
       wetlands: CLP_wetlands
       precip_normals: CLP_AvePrecip1981_2010
@@ -64,3 +101,12 @@ sources:
     attribution: >-
       USDA/NRCS National Geospatial Center of Excellence,
       via CSU Geospatial Centroid
+
+# Facts the build asserts against. If a refresh changes these, the pipeline
+# fails loudly rather than quietly producing a Colorado-shaped Poudre basin.
+expectations:
+  huc12_count: 53
+  huc12_touching_wy: 7
+  huc12_entirely_wy: ["101900070401"]   # Upper Dale Creek
+  basin_north_edge_min: 41.15           # degrees; WY border is 41.0
+  wyoming_sqkm_min: 280                 # measured 311.0; the real invariant
