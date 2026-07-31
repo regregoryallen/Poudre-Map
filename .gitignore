@@ -19,3 +19,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# Vendored browser libs — re-fetch with: make vendor
+web/vendor/

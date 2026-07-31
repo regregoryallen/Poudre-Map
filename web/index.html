@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cache la Poudre Watershed</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f5f2ed'/%3E%3Cpath d='M3 20c4-1 5-6 9-6s5 5 9 4 5-6 8-7' stroke='%232b6cb0' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<style>
+  :root {
+    --panel-bg: rgba(252, 251, 249, 0.96);
+    --panel-fg: #1c1917;
+    --panel-muted: #6b625b;
+    --panel-line: #ddd6cf;
+    --accent: #b3541e;
+    --water: #2b6cb0;
+    --canal: #c05621;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --panel-bg: rgba(24, 22, 20, 0.94);
+      --panel-fg: #f0ece7;
+      --panel-muted: #a8a09a;
+      --panel-line: #3a352f;
+      --accent: #e8834a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--panel-fg);
+  }
+  #map { position: absolute; inset: 0; background: #e9e5df; }
+  @media (prefers-color-scheme: dark) { #map { background: #14120f; } }
+
+  #panel {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    width: 268px; max-height: calc(100% - 24px);
+    overflow-y: auto;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    backdrop-filter: blur(8px);
+  }
+  #panel header {
+    padding: 13px 15px 11px;
+    border-bottom: 1px solid var(--panel-line);
+  }
+  #panel h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+  #panel .sub { margin: 3px 0 0; font-size: 11.5px; color: var(--panel-muted); }
+
+  .group { padding: 11px 15px; border-bottom: 1px solid var(--panel-line); }
+  .group:last-child { border-bottom: 0; }
+  .group h2 {
+    margin: 0 0 8px; font-size: 10.5px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--panel-muted);
+  }
+  label.row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 0; cursor: pointer; font-size: 13px;
+  }
+  label.row input { accent-color: var(--accent); margin: 0; flex: none; }
+  .swatch { width: 16px; height: 3px; border-radius: 2px; flex: none; }
+  .swatch.dot { width: 8px; height: 8px; border-radius: 50%; }
+  select, input[type=range] { width: 100%; }
+  select {
+    padding: 5px 7px; border-radius: 6px; font: inherit; font-size: 13px;
+    border: 1px solid var(--panel-line);
+    background: var(--panel-bg); color: var(--panel-fg);
+  }
+  .rangewrap { display: flex; align-items: center; gap: 9px; }
+  .rangewrap output {
+    font-variant-numeric: tabular-nums; font-size: 12px;
+    color: var(--panel-muted); min-width: 14px; text-align: right;
+  }
+
+  #readout {
+    padding: 11px 15px; font-size: 12.5px; min-height: 62px;
+    border-bottom: 1px solid var(--panel-line);
+  }
+  #readout .name { font-weight: 600; }
+  #readout .meta { color: var(--panel-muted); font-size: 11.5px; margin-top: 2px; }
+  #readout .idle { color: var(--panel-muted); font-style: italic; }
+  .wy { color: var(--accent); font-weight: 600; }
+
+  #stats { font-size: 11.5px; color: var(--panel-muted); }
+  #stats table { width: 100%; border-collapse: collapse; }
+  #stats td { padding: 1px 0; }
+  #stats td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+  #note { padding: 10px 15px; font-size: 11px; color: var(--panel-muted); }
+  #note b { color: var(--panel-fg); font-weight: 600; }
+
+  .maplibregl-popup-content {
+    font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+    padding: 9px 12px; border-radius: 8px;
+  }
+  .maplibregl-popup-content h3 { margin: 0 0 4px; font-size: 13.5px; }
+  .maplibregl-popup-content dl {
+    margin: 0; display: grid; grid-template-columns: auto auto;
+    gap: 1px 10px; font-size: 12px;
+  }
+  .maplibregl-popup-content dt { color: #6b625b; }
+  .maplibregl-popup-content dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+  #err {
+    position: absolute; bottom: 12px; left: 12px; z-index: 20;
+    max-width: 420px; padding: 10px 14px; border-radius: 8px;
+    background: #7f1d1d; color: #fff; font-size: 13px; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="err"></div>
+
+<div id="panel">
+  <header>
+    <h1>Cache la Poudre Watershed</h1>
+    <p class="sub">USGS HUC8 10190007 · 4,892.7 km²</p>
+  </header>
+
+  <div id="readout"><span class="idle">Hover a subwatershed</span></div>
+
+  <div class="group">
+    <h2>Base layer</h2>
+    <select id="basemap">
+      <option value="hillshade">Hillshade (Esri)</option>
+      <option value="topo">USGS Topo</option>
+      <option value="imagery">USGS Imagery + Topo</option>
+      <option value="osm">OpenStreetMap</option>
+      <option value="none">None</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <h2>Subdivision</h2>
+    <label class="row"><input type="radio" name="detail" value="none"> Basin outline only</label>
+    <label class="row"><input type="radio" name="detail" value="huc10"> HUC10 — 10 watersheds</label>
+    <label class="row"><input type="radio" name="detail" value="huc12" checked> HUC12 — 53 subwatersheds</label>
+  </div>
+
+  <div class="group">
+    <h2>Hydrography</h2>
+    <label class="row">
+      <input type="checkbox" id="t-flowlines" checked>
+      <span class="swatch" style="background:var(--water)"></span> Streams
+    </label>
+    <div class="rangewrap" style="margin:5px 0 8px 24px">
+      <input type="range" id="minorder" min="2" max="7" value="2" step="1">
+      <output id="minorder-out">2</output>
+    </div>
+    <label class="row">
+      <input type="checkbox" id="t-waterbodies" checked>
+      <span class="swatch dot" style="background:var(--water)"></span> Lakes &amp; reservoirs
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-canals" checked>
+      <span class="swatch" style="background:var(--canal)"></span> Canals &amp; ditches
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-artificial">
+      <span class="swatch" style="background:#8c6d4f"></span> NHD artificial paths
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-gages">
+      <span class="swatch dot" style="background:#111"></span> Stream gages
+    </label>
+  </div>
+
+  <div class="group">
+    <h2>The Wyoming edge</h2>
+    <label class="row">
+      <input type="checkbox" id="t-wy" checked>
+      <span class="swatch" style="background:var(--accent)"></span> Highlight WY subwatersheds
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-border" checked>
+      <span class="swatch" style="background:var(--accent)"></span> 41°N state line
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-nldi">
+      <span class="swatch" style="background:#7a7a7a"></span> NLDI gage delineation
+    </label>
+    <div id="stats" style="margin-top:9px">
+      <table>
+        <tr><td>Colorado</td><td>4,581.8 km² · 93.6%</td></tr>
+        <tr><td>Wyoming</td><td>311.0 km² · 6.4%</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div id="note">
+    <b>Not a closed system.</b> Horsetooth Reservoir and Carter Lake sit inside
+    the basin but import water from the Colorado River basin via the
+    Colorado-Big Thompson Project.
+  </div>
+</div>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="vendor/pmtiles.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var BOUNDS = [[-105.9301, 40.3731], [-104.5996, 41.2102]];
+
+  // `natural` is computed in build.py, not here — see classify_flowlines().
+  // NHDPlus carries irrigation canals inside the flowline network at stream
+  // orders as high as the Poudre's own, and ftype alone can't separate them
+  // (a canal crossing a reservoir gets the same 558 code as a river crossing
+  // a lake), so the rule lives in one place upstream and rides in the tiles.
+  var FTYPE = {
+    460: "Stream / river", 558: "Artificial path", 336: "Canal / ditch",
+    428: "Pipeline", 334: "Connector"
+  };
+  var USGS_ATTR = 'USGS <a href="https://www.usgs.gov/national-hydrography">WBD / NHDPlus HR / NLDI</a>';
+  var CSU_ATTR = 'CSU Geospatial Centroid';
+
+  var BASEMAPS = {
+    hillshade: {
+      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}"],
+      attribution: "Esri, USGS, NOAA", maxzoom: 16
+    },
+    topo: {
+      tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}"],
+      attribution: "USGS The National Map", maxzoom: 16
+    },
+    imagery: {
+      tiles: ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}"],
+      attribution: "USGS The National Map", maxzoom: 16
+    },
+    osm: {
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxzoom: 19
+    },
+    none: null
+  };
+
+  function fail(msg) {
+    var el = document.getElementById("err");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+
+  // Resolve the archive next to this page, so the app works at any mount
+  // point — "/" locally, "/poudremap/" on the server.
+  var dir = location.pathname.replace(/[^/]*$/, "");
+  var PMTILES_URL = "pmtiles://" + location.origin + dir + "poudre.pmtiles";
+
+  var protocol = new pmtiles.Protocol();
+  maplibregl.addProtocol("pmtiles", protocol.tile);
+
+  // The 41st parallel is the CO/WY border, drawn from data rather than
+  // fetched — it is a line of latitude, not a survey artifact.
+  var borderLine = {
+    type: "Feature", properties: {},
+    geometry: { type: "LineString", coordinates: [[-106.3, 41.0], [-104.2, 41.0]] }
+  };
+
+  var map = new maplibregl.Map({
+    container: "map",
+    style: { version: 8, sources: {}, layers: [] },
+    bounds: BOUNDS,
+    fitBoundsOptions: { padding: { top: 40, bottom: 40, left: 300, right: 40 } },
+    minZoom: 6.5,
+    maxZoom: 14,
+    attributionControl: false
+  });
+
+  // Exposed deliberately: lets you poke at layers and filters from the
+  // console, and lets headless checks drive the map without a visible canvas.
+  window.poudreMap = map;
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+  var attrib = new maplibregl.AttributionControl({ compact: true });
+  map.addControl(attrib, "bottom-right");
+
+  map.on("error", function (e) {
+    if (e && e.error && /pmtiles|poudre/i.test(String(e.error.message || ""))) {
+      fail("Could not load poudre.pmtiles — " + e.error.message);
+    }
+  });
+
+  map.on("load", function () {
+    map.addSource("poudre", { type: "vector", url: PMTILES_URL, attribution: USGS_ATTR + "; " + CSU_ATTR });
+    map.addSource("border", { type: "geojson", data: borderLine });
+
+    // --- subwatershed fills (bottom of the vector stack) ------------------
+    // These stay *visible* at every detail level and go to zero opacity
+    // instead of visibility:none, because queryRenderedFeatures ignores
+    // hidden layers — hiding them would silently kill hover and click.
+    map.addLayer({
+      id: "huc12-fill", type: "fill", source: "poudre", "source-layer": "huc12",
+      paint: { "fill-color": "#8a8f98", "fill-opacity": 0.06 }
+    });
+    map.addLayer({
+      id: "huc10-fill", type: "fill", source: "poudre", "source-layer": "huc10",
+      paint: { "fill-color": "#8a8f98", "fill-opacity": 0 }
+    });
+    map.addLayer({
+      id: "huc12-hover", type: "fill", source: "poudre", "source-layer": "huc12",
+      paint: { "fill-color": "#4a90d9", "fill-opacity": 0.20 },
+      filter: ["==", ["get", "huc12"], ""]
+    });
+    map.addLayer({
+      id: "huc10-hover", type: "fill", source: "poudre", "source-layer": "huc10",
+      paint: { "fill-color": "#4a90d9", "fill-opacity": 0.20 },
+      filter: ["==", ["get", "huc10"], ""]
+    });
+    map.addLayer({
+      id: "wy-fill", type: "fill", source: "poudre", "source-layer": "huc12",
+      filter: ["in", "WY", ["get", "states"]],
+      paint: { "fill-color": "#d94801", "fill-opacity": 0.16 }
+    });
+
+    // --- boundaries -------------------------------------------------------
+    map.addLayer({
+      id: "huc12-line", type: "line", source: "poudre", "source-layer": "huc12",
+      paint: { "line-color": "#6f6a64", "line-width": 0.7, "line-opacity": 0.75 }
+    });
+    map.addLayer({
+      id: "huc10-line", type: "line", source: "poudre", "source-layer": "huc10",
+      layout: { visibility: "none" },
+      paint: { "line-color": "#4a453f", "line-width": 1.1 }
+    });
+
+    // --- hydrography ------------------------------------------------------
+    map.addLayer({
+      id: "waterbodies", type: "fill", source: "poudre", "source-layer": "waterbodies",
+      paint: { "fill-color": "#2b6cb0", "fill-opacity": 0.75 }
+    });
+    map.addLayer({
+      id: "flowlines", type: "line", source: "poudre", "source-layer": "flowlines",
+      layout: { "line-cap": "round", "line-join": "round" },
+      filter: flowlineFilter(2),
+      paint: {
+        "line-color": "#2b6cb0",
+        "line-width": [
+          "interpolate", ["linear"], ["zoom"],
+          8,  ["interpolate", ["linear"], ["get", "streamorde"], 2, 0.2, 9, 1.9],
+          13, ["interpolate", ["linear"], ["get", "streamorde"], 2, 0.7, 9, 5.6]
+        ],
+        "line-opacity": 0.9
+      }
+    });
+    // The canal/ditch/pipeline share of the NHD flowline network, pulled out
+    // of "streams" so it can't masquerade as natural drainage.
+    map.addLayer({
+      id: "nhd-artificial", type: "line", source: "poudre", "source-layer": "flowlines",
+      layout: { visibility: "none" },
+      filter: ["==", ["get", "natural"], false],
+      paint: { "line-color": "#8c6d4f", "line-width": 0.9, "line-opacity": 0.85,
+               "line-dasharray": [3, 2] }
+    });
+    map.addLayer({
+      id: "canals", type: "line", source: "poudre", "source-layer": "canals",
+      paint: { "line-color": "#c05621", "line-width": 1.0, "line-opacity": 0.85 }
+    });
+
+    // --- basin outline, cross-check, border ------------------------------
+    map.addLayer({
+      id: "nldi-line", type: "line", source: "poudre", "source-layer": "nldi_basin",
+      layout: { visibility: "none" },
+      paint: { "line-color": "#7a7a7a", "line-width": 1.6, "line-dasharray": [1, 1.6] }
+    });
+    map.addLayer({
+      id: "basin-line", type: "line", source: "poudre", "source-layer": "basin",
+      paint: { "line-color": "#16130f", "line-width": 2.4 }
+    });
+    map.addLayer({
+      id: "border-line", type: "line", source: "border",
+      paint: { "line-color": "#d94801", "line-width": 1.4, "line-dasharray": [4, 3], "line-opacity": 0.9 }
+    });
+
+    map.addLayer({
+      id: "gages", type: "circle", source: "poudre", "source-layer": "gages",
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": 5, "circle-color": "#1a1a1a",
+        "circle-stroke-width": 1.6, "circle-stroke-color": "#fff"
+      }
+    });
+
+    setBasemap(document.getElementById("basemap").value);
+    wireControls();
+    wireInteraction();
+  });
+
+  // Streams are natural-only; the order threshold rides along with it so the
+  // two filters can't clobber each other.
+  function flowlineFilter(minOrder) {
+    return ["all",
+      ["==", ["get", "natural"], true],
+      [">=", ["get", "streamorde"], minOrder]
+    ];
+  }
+
+  // --- basemap swapping ---------------------------------------------------
+  function setBasemap(key) {
+    if (map.getLayer("basemap")) map.removeLayer("basemap");
+    if (map.getSource("basemap")) map.removeSource("basemap");
+    var b = BASEMAPS[key];
+    if (!b) return;
+    map.addSource("basemap", {
+      type: "raster", tiles: b.tiles, tileSize: 256,
+      maxzoom: b.maxzoom, attribution: b.attribution
+    });
+    // Beneath everything else.
+    var first = map.getStyle().layers[0];
+    map.addLayer({
+      id: "basemap", type: "raster", source: "basemap",
+      paint: { "raster-opacity": key === "imagery" ? 1 : 0.85 }
+    }, first ? first.id : undefined);
+  }
+
+  function show(id, on) {
+    if (map.getLayer(id)) {
+      map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    }
+  }
+
+  // Which tier hover and click interrogate. "none" still hit-tests HUC12 —
+  // the outline-only view is a cartographic choice, not a reason to make the
+  // map inert.
+  var detail = "huc12";
+
+  function setDetail(value) {
+    detail = value;
+    map.setPaintProperty("huc12-fill", "fill-opacity", value === "huc12" ? 0.06 : 0);
+    show("huc12-line", value === "huc12");
+    show("huc10-line", value === "huc10");
+    // Clear any stale highlight from the tier we just left.
+    map.setFilter("huc12-hover", ["==", ["get", "huc12"], ""]);
+    map.setFilter("huc10-hover", ["==", ["get", "huc10"], ""]);
+  }
+
+  function wireControls() {
+    document.getElementById("basemap").addEventListener("change", function () {
+      setBasemap(this.value);
+    });
+
+    document.querySelectorAll('input[name=detail]').forEach(function (el) {
+      el.addEventListener("change", function () { setDetail(this.value); });
+    });
+
+    var pairs = [
+      ["t-flowlines", "flowlines"], ["t-waterbodies", "waterbodies"],
+      ["t-canals", "canals"], ["t-artificial", "nhd-artificial"],
+      ["t-gages", "gages"], ["t-wy", "wy-fill"],
+      ["t-border", "border-line"], ["t-nldi", "nldi-line"]
+    ];
+    pairs.forEach(function (p) {
+      var el = document.getElementById(p[0]);
+      show(p[1], el.checked);
+      el.addEventListener("change", function () { show(p[1], this.checked); });
+    });
+
+    var slider = document.getElementById("minorder");
+    var out = document.getElementById("minorder-out");
+    slider.addEventListener("input", function () {
+      out.value = this.value;
+      map.setFilter("flowlines", flowlineFilter(+this.value));
+    });
+
+    setDetail(document.querySelector("input[name=detail]:checked").value);
+  }
+
+  // --- hover + click ------------------------------------------------------
+  function wireInteraction() {
+    var readout = document.getElementById("readout");
+    var idle = '<span class="idle">Hover a subwatershed</span>';
+
+    map.on("mousemove", function (e) {
+      var tier = detail === "huc10" ? "huc10" : "huc12";
+      var hits = map.queryRenderedFeatures(e.point, { layers: [tier + "-fill"] });
+      if (!hits.length) {
+        map.setFilter(tier + "-hover", ["==", ["get", tier], ""]);
+        readout.innerHTML = idle;
+        map.getCanvas().style.cursor = "";
+        return;
+      }
+      var p = hits[0].properties;
+      map.setFilter(tier + "-hover", ["==", ["get", tier], p[tier]]);
+      map.getCanvas().style.cursor = "pointer";
+      var wy = String(p.states || "").indexOf("WY") !== -1;
+      readout.innerHTML =
+        '<div class="name">' + (p.name || "—") + '</div>' +
+        '<div class="meta">' + tier.toUpperCase() + ' ' + p[tier] + ' · ' +
+        Number(p.areasqkm).toFixed(1) + ' km² · ' +
+        (wy ? '<span class="wy">' + p.states + '</span>' : p.states) + '</div>';
+    });
+
+    map.on("click", function (e) {
+      var tier = detail === "huc10" ? "huc10" : "huc12";
+      var hits = map.queryRenderedFeatures(e.point, {
+        layers: ["gages", "flowlines", "canals", "nhd-artificial", tier + "-fill"]
+          .filter(function (id) { return map.getLayer(id); })
+      });
+      if (!hits.length) return;
+      var f = hits[0], p = f.properties, html;
+
+      if (f.layer.id === "gages") {
+        html = "<h3>" + (p.station_nm || "Gage") + "</h3><dl>" +
+          "<dt>Site</dt><dd>" + (p.sourceid || "—") + "</dd>" +
+          "<dt>Drainage</dt><dd>" + (p.dasqmi ? Number(p.dasqmi).toFixed(0) + " mi²" : "—") + "</dd></dl>";
+      } else if (f.layer.id === "flowlines" || f.layer.id === "nhd-artificial") {
+        html = "<h3>" + (p.gnis_name || "Unnamed reach") + "</h3><dl>" +
+          "<dt>NHD type</dt><dd>" + (FTYPE[p.ftype] || p.ftype) + "</dd>" +
+          "<dt>Strahler order</dt><dd>" + p.streamorde + "</dd>" +
+          "<dt>Reach length</dt><dd>" + Number(p.lengthkm).toFixed(2) + " km</dd>" +
+          "<dt>Drainage above</dt><dd>" + Number(p.totdasqkm).toFixed(1) + " km²</dd></dl>";
+      } else if (f.layer.id === "canals") {
+        html = "<h3>" + (p.NAME || p.HB_NAME || "Unnamed ditch") + "</h3><dl>" +
+          "<dt>Water district</dt><dd>" + (p.WD_ID_7 || "—") + "</dd></dl>";
+      } else {
+        html = "<h3>" + (p.name || "Subwatershed") + "</h3><dl>" +
+          "<dt>" + tier.toUpperCase() + "</dt><dd>" + p[tier] + "</dd>" +
+          "<dt>Area</dt><dd>" + Number(p.areasqkm).toFixed(1) + " km²</dd>" +
+          "<dt>States</dt><dd>" + p.states + "</dd>" +
+          "<dt>Drains to</dt><dd>" + (p.tohuc || "—") + "</dd></dl>";
+      }
+      new maplibregl.Popup({ closeButton: true, maxWidth: "280px" })
+        .setLngLat(e.lngLat).setHTML(html).addTo(map);
+    });
+  }
+})();
+</script>
+</body>
+</html>

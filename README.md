@@ -44,16 +44,40 @@ Three stages. The first two are shared; only rendering diverges.
 | `fetch.py` | Pulls each source's REST endpoint. Only stage that touches the network. | `data/cache/*.gpkg` | done |
 | `build.py` | Clips to the basin, validates, writes GeoJSON. Deterministic, offline. | `data/derived/*.geojson` (EPSG:4326) | done |
 | `qa.py` | Unstyled diagnostic plot. Not cartography — geometry checking. | `out/qa.png` | done |
+| `tiles.py` | `tippecanoe` → single static vector-tile file. | `web/poudre.pmtiles` | done |
+| `web/index.html` | MapLibre viewer. No build step, no framework. | — | done |
 | `terrain.py` | 3DEP → hillshade. Full-res for print, downsampled for web. | GeoTIFF | todo |
-| `tiles.py` | `tippecanoe` → single static vector-tile file. | `poudre.pmtiles` | todo |
 | `render.py` | Static cartography in EPSG:26913. | PNG / PDF / SVG | todo |
 
 ```bash
-make venv && make data && .venv/bin/python src/qa.py
+make venv && make data && make tiles && make serve
 ```
 
 Current derived output: 1 basin polygon, 10 HUC10s, 53 HUC12s, 13,016 flowlines
-(Strahler ≥ 2), 1,870 waterbodies, 344 canals, 6 gages.
+(Strahler ≥ 2), 1,870 waterbodies, 344 canals, 6 gages — 7.0 MB as PMTiles.
+
+## Viewer
+
+Deployed to **http://homeweb.lan/poudremap/** via `./deploy.sh`.
+
+Runtime controls: base layer (Esri hillshade, USGS Topo, USGS Imagery, OSM,
+none), subdivision tier (basin / HUC10 / HUC12), hydrography toggles, a
+Strahler-order threshold for stream density, and the Wyoming overlays. Hover
+reads out the subwatershed under the cursor; clicking any feature opens its
+attributes.
+
+Two things the viewer does that are worth not breaking:
+
+- **Hit-test layers stay visible at zero opacity.** `queryRenderedFeatures`
+  skips layers set to `visibility: none`, so hiding the subwatershed fills
+  when you switch tiers would silently kill hover and click.
+- **PMTiles needs HTTP range requests.** Caddy handles this; Python's stock
+  `http.server` does not, which is why `src/devserve.py` exists. `deploy.sh`
+  verifies a 206 response after every deploy.
+
+`deploy.sh` targets a *subdirectory* and guards on it, so its `rsync --delete`
+can only prune inside `/usr/share/caddy/poudremap/` and can never touch the
+main site.
 
 Canonical data is stored in EPSG:4326; each renderer reprojects at the end —
 the web path to Web Mercator (forced), the print path to NAD83 / UTM 13N, which
@@ -85,6 +109,25 @@ still looks like a basin. So the pipeline uses NHDPlus HR for flowlines
 and `build.py` hard-fails on the Wyoming area, the HUC12 count, the specific
 WY-designated subwatersheds, and any basin-wide layer with no features north of
 41°N. Expected values live in `expectations:` in `config/sources.yml`.
+
+## Canals are not streams
+
+NHDPlus carries irrigation canals *inside* the flowline network and assigns
+them Strahler orders as high as the Poudre's own. Drawn naively, the Larimer
+and Weld Canal and the Greeley Number 2 Canal render as seventh-order rivers.
+
+Filtering on `ftype` gets most of the way (336 CanalDitch, 428 Pipeline, 334
+Connector), but not all: where a canal runs through a reservoir, NHD codes that
+segment 558 ArtificialPath — the same code it uses for a *river* passing
+through a lake. `ftype` alone cannot separate the two.
+
+`build.py:classify_flowlines()` resolves it with the only signal available, the
+GNIS name, and tags every reach `natural` so the renderers don't re-derive the
+rule. Unnamed 558 reaches stay natural; those are overwhelmingly genuine
+through-lake connectors. Result: 12,417 natural and 599 artificial, and at
+order 7+ only the Cache la Poudre and its North Fork draw as streams.
+
+The artificial reaches aren't discarded — the viewer has a toggle for them.
 
 ## Data
 

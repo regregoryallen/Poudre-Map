@@ -17,12 +17,34 @@ write output if it doesn't.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 
 import geopandas as gpd
 from shapely.geometry import box
 
 import sources as S
+
+# NHD ftype codes.
+FTYPE_STREAM = 460          # StreamRiver — unambiguously natural
+FTYPE_ARTIFICIAL_PATH = 558  # centerline through a waterbody — ambiguous
+FTYPE_ARTIFICIAL = {336, 428, 334}  # CanalDitch, Pipeline, Connector
+
+# NHDPlus carries irrigation canals inside the flowline network, and gives them
+# Strahler orders as high as the Poudre's own. ftype 336 catches most of it,
+# but where a canal runs through a reservoir NHD codes that segment 558
+# (ArtificialPath) — the same code it uses for a *river* passing through a
+# lake. So ftype alone cannot separate them, and drawing all 558 as natural
+# puts the Larimer and Weld Canal on the map as a seventh-order river.
+#
+# The name is the only signal that distinguishes the two, so 558 reaches with
+# a canal-ish GNIS name are reclassified as artificial. Unnamed 558 reaches
+# stay natural: those are overwhelmingly genuine through-lake connectors.
+CANAL_NAME = re.compile(
+    r"\b(?:canal|ditch|lateral|flume|siphon|aqueduct|inlet|outlet|feeder|"
+    r"supply|tailrace|headrace|penstock|sluice)\b",
+    re.IGNORECASE,
+)
 
 # Colorado's northern border is the 41st parallel, so the basin's CO/WY split
 # is exactly a cut at y=41.0 — no state-boundary layer needed.
@@ -50,6 +72,33 @@ def split_at_border(gdf: gpd.GeoDataFrame) -> tuple[float, float]:
     wy = gpd.clip(gdf, gpd.GeoDataFrame(geometry=[north], crs=gdf.crs))
     return (area_sqkm(co) if not co.empty else 0.0,
             area_sqkm(wy) if not wy.empty else 0.0)
+
+
+def classify_flowlines(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Tag each reach `natural` so the renderers don't have to re-derive it.
+
+    Doing this here rather than in a map filter keeps the rule in one place,
+    testable, and carried in the tiles.
+    """
+    gdf = gdf.copy()
+    names = gdf["gnis_name"].fillna("")
+    canal_named = names.str.contains(CANAL_NAME, regex=True)
+
+    gdf["natural"] = (
+        (gdf["ftype"] == FTYPE_STREAM)
+        | ((gdf["ftype"] == FTYPE_ARTIFICIAL_PATH) & ~canal_named)
+    )
+
+    n_reclass = int(
+        ((gdf["ftype"] == FTYPE_ARTIFICIAL_PATH) & canal_named).sum()
+    )
+    n_art = int((gdf["ftype"].isin(FTYPE_ARTIFICIAL)).sum())
+    print(
+        f"classify flowlines: {int(gdf['natural'].sum())} natural, "
+        f"{len(gdf) - int(gdf['natural'].sum())} artificial "
+        f"({n_art} by ftype, {n_reclass} canal-named ArtificialPath)"
+    )
+    return gdf
 
 
 def validate(cfg: dict, layers: dict[str, gpd.GeoDataFrame]) -> list[str]:
@@ -149,6 +198,9 @@ def build(cfg: dict, simplify: float | None) -> int:
         before = len(layers[name])
         layers[name] = gpd.clip(layers[name], basin)
         print(f"clip {name}: {before} → {len(layers[name])}")
+
+    if "flowlines" in layers:
+        layers["flowlines"] = classify_flowlines(layers["flowlines"])
 
     # --- validate before writing anything ----------------------------------
     problems = validate(cfg, layers)
