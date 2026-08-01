@@ -111,6 +111,87 @@
     max-width: 420px; padding: 10px 14px; border-radius: 8px;
     background: #7f1d1d; color: #fff; font-size: 13px; display: none;
   }
+
+  /* --- map labels (HTML markers, no glyph endpoint needed) --------------- */
+  .lbl { display: flex; align-items: center; gap: 5px; pointer-events: none;
+         white-space: nowrap; transform: translate(6px, 0); }
+  .lbl.rev { transform: translate(-6px, 0); }
+  .lbl .dot {
+    width: 7px; height: 7px; border-radius: 50%; flex: none;
+    background: #1c1917; border: 1.5px solid #fff;
+    box-shadow: 0 0 0 0.5px rgba(0,0,0,.5);
+  }
+  .lbl.out .dot { background: #fff; border-color: #1c1917; }
+  .lbl.pass .dot {
+    border-radius: 0; width: 0; height: 0; background: none;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-bottom: 8px solid #fff; border-top: 0;
+    filter: drop-shadow(0 0 1px rgba(0,0,0,.9));
+  }
+  .lbl span {
+    font-size: 12px; font-weight: 600; color: #16130f;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 5px #fff;
+  }
+  .lbl.r2 span { font-size: 11px; font-weight: 500; }
+  .lbl.r3 span { font-size: 10.5px; font-weight: 400; }
+  .lbl.out span, .lbl.pass span { font-style: italic; color: #4b443e; }
+  .shield {
+    font-size: 11px; font-weight: 700; color: #27272a; pointer-events: none;
+    background: #fafaf9; border: 1px solid #3f3f46; border-radius: 4px;
+    padding: 1px 5px; box-shadow: 0 1px 3px rgba(0,0,0,.28);
+  }
+
+  /* --- help ------------------------------------------------------------- */
+  /* In the panel header, not floating over the map — the top-right corner
+     belongs to MapLibre's zoom control and the two overlapped. */
+  #panel header { position: relative; padding-right: 44px; }
+  #helpbtn {
+    position: absolute; top: 12px; right: 13px;
+    width: 24px; height: 24px; border-radius: 50%; cursor: pointer;
+    border: 1px solid var(--panel-line); background: transparent;
+    color: var(--panel-muted); font: 600 13px/1 ui-sans-serif, system-ui;
+    display: grid; place-items: center; padding: 0;
+  }
+  #helpbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+  #help {
+    position: absolute; inset: 0; z-index: 40; display: none;
+    background: rgba(20,18,16,0.55); backdrop-filter: blur(2px);
+  }
+  #help.open { display: grid; place-items: center; }
+  #help .sheet {
+    width: min(760px, calc(100% - 40px)); max-height: calc(100% - 60px);
+    overflow-y: auto; background: var(--panel-bg); color: var(--panel-fg);
+    border: 1px solid var(--panel-line); border-radius: 12px;
+    padding: 22px 26px 24px; box-shadow: 0 18px 60px rgba(0,0,0,.4);
+  }
+  #help h2 { margin: 0 0 2px; font-size: 17px; }
+  #help h3 {
+    margin: 20px 0 7px; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--panel-muted); font-weight: 650;
+  }
+  #help p { margin: 0 0 9px; font-size: 13px; line-height: 1.55; }
+  #help dl {
+    display: grid; grid-template-columns: minmax(96px, auto) 1fr;
+    gap: 5px 14px; margin: 0; font-size: 12.5px; line-height: 1.5;
+  }
+  #help dt { font-weight: 600; }
+  #help dd { margin: 0; color: var(--panel-fg); }
+  #help .muted { color: var(--panel-muted); }
+  #help code {
+    font-size: 11.5px; background: rgba(128,128,128,0.14);
+    padding: 1px 4px; border-radius: 3px;
+  }
+  #help .close {
+    float: right; cursor: pointer; border: 0; background: none;
+    color: var(--panel-muted); font-size: 20px; line-height: 1; padding: 0 2px;
+  }
+  #help .close:hover { color: var(--panel-fg); }
+  #help .note {
+    margin-top: 18px; padding: 11px 13px; border-radius: 8px;
+    background: rgba(179,84,30,0.10); border: 1px solid rgba(179,84,30,0.28);
+    font-size: 12.5px; line-height: 1.55;
+  }
 </style>
 </head>
 <body>
@@ -118,10 +199,123 @@
 <div id="map"></div>
 <div id="err"></div>
 
+<div id="help">
+  <div class="sheet">
+    <button class="close" id="helpclose" title="Close">×</button>
+    <h2>Reading this map</h2>
+    <p class="muted" style="font-size:12.5px">
+      The Cache la Poudre watershed — USGS HUC8 10190007. Every layer here is
+      drawn from public federal data; nothing is estimated or interpolated.
+    </p>
+
+    <h3>Controls</h3>
+    <dl>
+      <dt>Base layer</dt>
+      <dd>The imagery underneath. <b>Hillshade</b> is bare relief with no
+        labels. <b>USGS Topo</b> carries its own contours, roads and place
+        names — with it, you may want the Reference layers off to avoid
+        double-labelling.</dd>
+      <dt>Subdivision</dt>
+      <dd>How finely the basin is split. See HUC below.</dd>
+      <dt>Streams</dt>
+      <dd>The natural drainage network. The slider hides small streams so the
+        trunk is legible; the dropdown chooses what "small" means.</dd>
+      <dt>Canals &amp; ditches</dt>
+      <dd>Irrigation infrastructure — water moved by people, not gravity
+        alone. Below the canyon mouth this is most of the visible network.</dd>
+      <dt>NHD artificial paths</dt>
+      <dd>Reaches the federal data files as flowlines but which are canals,
+        pipelines or connectors. Off by default; see the note below.</dd>
+      <dt>Place names</dt>
+      <dd>A curated dozen towns plus Cameron Pass. Hollow markers and italics
+        mean the place lies <em>outside</em> the watershed — Loveland is in the
+        Big Thompson basin, Cameron Pass drains west off the Divide.</dd>
+    </dl>
+
+    <h3>Terms</h3>
+    <dl>
+      <dt>HUC</dt>
+      <dd>Hydrologic Unit Code — the USGS system of nested drainage areas. More
+        digits means smaller. This basin is one <b>HUC8</b>
+        (<code>10190007</code>), which contains 10 <b>HUC10</b> watersheds,
+        which contain 53 <b>HUC12</b> subwatersheds.</dd>
+      <dt>Strahler order</dt>
+      <dd>A measure of <em>branching</em>, not size. A headwater stream is
+        order 1. Order only increases where two streams of the <em>same</em>
+        order meet: 3 + 3 makes 4, but 3 + 4 stays 4.</dd>
+      <dt>Drainage area</dt>
+      <dd>How much land drains through a given reach. This is closer to what
+        most people mean by "how big is this river."</dd>
+      <dt>NHD / NHDPlus HR</dt>
+      <dd>National Hydrography Dataset, High Resolution — the federal stream
+        and waterbody network.</dd>
+      <dt>WBD</dt>
+      <dd>Watershed Boundary Dataset — the source of the basin outline and all
+        the HUC subdivisions.</dd>
+      <dt>NLDI</dt>
+      <dd>Network-Linked Data Index. Delineates the drainage upstream of a
+        chosen point. Included as an independent check on the WBD boundary:
+        the two agree over 98.9% of their area.</dd>
+      <dt>Stream gage</dt>
+      <dd>A USGS measurement station.</dd>
+    </dl>
+
+    <div class="note">
+      <b>Why the main stem can look "smaller" than the North Fork.</b>
+      Set the stream slider to 7 and the main Poudre disappears above the
+      confluence while the North Fork stays. That is correct. Strahler order
+      counts branching, and the North Fork drains a broad, low-relief network
+      of many small tributaries, so it accumulates order faster than the main
+      stem's steep, confined canyon. At the confluence the North Fork actually
+      drains slightly <em>more</em> land — 1,435 km² against 1,229 km². The
+      main stem is "main" because it carries the high-country snowmelt, not
+      because it drains more ground. Switch the dropdown to
+      <b>drainage area</b> to thin the network by size instead.
+    </div>
+
+    <div class="note" style="background:rgba(128,128,128,0.10);
+                             border-color:rgba(128,128,128,0.28)">
+      <b>Canals are not streams.</b> NHDPlus carries irrigation canals inside
+      the flowline network at stream orders as high as the Poudre's own, so
+      drawn naively the Larimer and Weld Canal appears as a seventh-order
+      river. Reaches are classified before they reach this map: 12,417 natural
+      and 599 artificial. The artificial ones have their own toggle rather than
+      being discarded.
+    </div>
+
+    <h3>Sources</h3>
+    <dl>
+      <dt>Boundary</dt>
+      <dd>USGS Watershed Boundary Dataset — HUC8, HUC10 and HUC12.</dd>
+      <dt>Hydrography</dt>
+      <dd>USGS NHDPlus High Resolution — flowlines, waterbodies, gages.
+        National coverage, which matters here: the basin crosses into Wyoming
+        and Colorado-only sources silently drop the headwaters.</dd>
+      <dt>Cross-check</dt>
+      <dd>USGS NLDI, delineated upstream of gage 06752500 at Greeley.</dd>
+      <dt>Canals</dt>
+      <dd>CSU Geospatial Centroid (originally USDA/NRCS). Colorado only.</dd>
+      <dt>Places</dt>
+      <dd>USGS Geographic Names Information System.</dd>
+      <dt>Roads</dt>
+      <dd>US Census Bureau TIGER/Line.</dd>
+      <dt>Relief</dt>
+      <dd>Esri World Hillshade, or USGS topographic and imagery basemaps.</dd>
+    </dl>
+
+    <p class="muted" style="margin-top:16px; font-size:12px">
+      Horsetooth Reservoir and Carter Lake lie inside the basin but import
+      water from the Colorado River basin via the Colorado-Big Thompson
+      Project. The watershed is not a closed hydrologic system.
+    </p>
+  </div>
+</div>
+
 <div id="panel">
   <header>
     <h1>Cache la Poudre Watershed</h1>
     <p class="sub">USGS HUC8 10190007 · 4,892.7 km²</p>
+    <button id="helpbtn" title="What do these controls mean?">?</button>
   </header>
 
   <div id="readout"><span class="idle">Hover a subwatershed</span></div>
@@ -150,7 +344,13 @@
       <input type="checkbox" id="t-flowlines" checked>
       <span class="swatch" style="background:var(--water)"></span> Streams
     </label>
-    <div class="rangewrap" style="margin:5px 0 8px 24px">
+    <div style="margin:5px 0 3px 24px">
+      <select id="basis" style="font-size:12px">
+        <option value="order">Thin by Strahler order</option>
+        <option value="area">Thin by drainage area</option>
+      </select>
+    </div>
+    <div class="rangewrap" style="margin:4px 0 8px 24px">
       <input type="range" id="minorder" min="2" max="7" value="2" step="1">
       <output id="minorder-out">2</output>
     </div>
@@ -169,6 +369,18 @@
     <label class="row">
       <input type="checkbox" id="t-gages">
       <span class="swatch dot" style="background:#111"></span> Stream gages
+    </label>
+  </div>
+
+  <div class="group">
+    <h2>Reference</h2>
+    <label class="row">
+      <input type="checkbox" id="t-places" checked>
+      <span class="swatch dot" style="background:#1c1917"></span> Place names
+    </label>
+    <label class="row">
+      <input type="checkbox" id="t-highways">
+      <span class="swatch" style="background:#57534e"></span> I-25 &amp; CO-14
     </label>
   </div>
 
@@ -364,6 +576,19 @@
       paint: { "line-color": "#c05621", "line-width": 1.0, "line-opacity": 0.85 }
     });
 
+    // Cased line, same treatment as the print map: dark casing under a light
+    // fill so the route survives both the pale plains and the shaded canyon.
+    map.addLayer({
+      id: "highways-case", type: "line", source: "poudre",
+      "source-layer": "highways", layout: { visibility: "none" },
+      paint: { "line-color": "#44403c", "line-width": 3.4, "line-opacity": 0.9 }
+    });
+    map.addLayer({
+      id: "highways", type: "line", source: "poudre",
+      "source-layer": "highways", layout: { visibility: "none" },
+      paint: { "line-color": "#f5f5f4", "line-width": 1.5 }
+    });
+
     // --- basin outline, cross-check, border ------------------------------
     map.addLayer({
       id: "nldi-line", type: "line", source: "poudre", "source-layer": "nldi_basin",
@@ -389,17 +614,82 @@
     });
 
     setBasemap(document.getElementById("basemap").value);
+    loadLabels();
     wireControls();
     wireInteraction();
+    wireHelp();
   });
+
+  // --- labels as HTML markers -------------------------------------------
+  // Not a symbol layer: those need a glyph endpoint, and hosting font PBFs to
+  // draw thirteen words would cost more than it buys.
+  var markers = [];
+
+  function loadLabels() {
+    fetch(dir + "labels.json")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        (data.places || []).forEach(function (p) {
+          var right = p.anchor === "right";
+          var el = document.createElement("div");
+          el.className = "lbl r" + p.rank + (right ? " rev" : "") +
+            (p.in_basin ? "" : " out") + (p.kind === "pass" ? " pass" : "");
+          var dot = '<span class="dot"></span>';
+          var txt = "<span>" + p.name.replace(/[<>&]/g, "") + "</span>";
+          // Right-anchored labels put the text before the dot so it reads
+          // away from the point instead of over its neighbour.
+          el.innerHTML = right ? txt + dot : dot + txt;
+          markers.push(new maplibregl.Marker({
+            element: el,
+            anchor: right ? "right" : "left",
+            offset: [0, p.below ? 9 : 0]
+          }).setLngLat([p.lon, p.lat]).addTo(map));
+        });
+        (data.shields || []).forEach(function (s) {
+          var el = document.createElement("div");
+          el.className = "shield";
+          el.textContent = s.label;
+          shieldMarkers.push(new maplibregl.Marker({ element: el })
+            .setLngLat([s.lon, s.lat]).addTo(map));
+        });
+        applyMarkerVisibility();
+      })
+      .catch(function () { /* labels are optional */ });
+  }
+
+  var shieldMarkers = [];
+
+  function applyMarkerVisibility() {
+    var places = document.getElementById("t-places").checked;
+    var roads = document.getElementById("t-highways").checked;
+    markers.forEach(function (m) {
+      m.getElement().style.display = places ? "" : "none";
+    });
+    shieldMarkers.forEach(function (m) {
+      m.getElement().style.display = roads ? "" : "none";
+    });
+  }
 
   // Streams are natural-only; the order threshold rides along with it so the
   // two filters can't clobber each other.
-  function flowlineFilter(minOrder) {
-    return ["all",
-      ["==", ["get", "natural"], true],
-      [">=", ["get", "streamorde"], minOrder]
-    ];
+  // Two ways to thin the network. Strahler order is the hydrologist's measure
+  // and counts branching; drainage area is what most people mean by "size".
+  // They disagree here in a way that surprises people — see the help sheet.
+  var AREA_STOPS = [0, 25, 100, 300, 800, 1500, 3000];
+
+  function flowlineFilter(step) {
+    var basis = document.getElementById("basis").value;
+    var test = basis === "area"
+      ? [">=", ["get", "totdasqkm"], AREA_STOPS[step - 2] || 0]
+      : [">=", ["get", "streamorde"], step];
+    return ["all", ["==", ["get", "natural"], true], test];
+  }
+
+  function basisLabel(step) {
+    if (document.getElementById("basis").value !== "area") return String(step);
+    var v = AREA_STOPS[step - 2] || 0;
+    return v >= 1000 ? (v / 1000) + "k" : String(v);
   }
 
   // --- basemap swapping ---------------------------------------------------
@@ -462,14 +752,46 @@
       el.addEventListener("change", function () { show(p[1], this.checked); });
     });
 
+    // Highways are two layers (casing + fill) behind one checkbox, and the
+    // shields are DOM markers rather than a layer.
+    var roads = document.getElementById("t-highways");
+    function syncRoads() {
+      show("highways-case", roads.checked);
+      show("highways", roads.checked);
+      applyMarkerVisibility();
+    }
+    roads.addEventListener("change", syncRoads);
+    syncRoads();
+
+    document.getElementById("t-places")
+      .addEventListener("change", applyMarkerVisibility);
+
     var slider = document.getElementById("minorder");
     var out = document.getElementById("minorder-out");
-    slider.addEventListener("input", function () {
-      out.value = this.value;
-      map.setFilter("flowlines", flowlineFilter(+this.value));
-    });
+    function syncStreams() {
+      out.value = basisLabel(+slider.value);
+      map.setFilter("flowlines", flowlineFilter(+slider.value));
+    }
+    slider.addEventListener("input", syncStreams);
+    document.getElementById("basis").addEventListener("change", syncStreams);
+    syncStreams();
 
     setDetail(document.querySelector("input[name=detail]:checked").value);
+  }
+
+  function wireHelp() {
+    var sheet = document.getElementById("help");
+    function open(on) { sheet.classList.toggle("open", on); }
+    document.getElementById("helpbtn")
+      .addEventListener("click", function () { open(true); });
+    document.getElementById("helpclose")
+      .addEventListener("click", function () { open(false); });
+    sheet.addEventListener("click", function (e) {
+      if (e.target === sheet) open(false);
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") open(false);
+    });
   }
 
   // --- hover + click ------------------------------------------------------

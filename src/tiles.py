@@ -38,7 +38,15 @@ LAYERS = [
     "waterbodies",
     "canals",
     "gages",
+    "highways",
 ]
+
+# Point labels don't go in the tiles. There are thirteen of them, and MapLibre
+# symbol layers need a glyph endpoint — a font-serving dependency that would
+# break the "drop three files on a static host" property for the sake of a
+# dozen words. HTML markers read from this JSON instead: no glyphs, no build
+# step, and the labels are stylable with ordinary CSS.
+LABELS_JSON = S.ROOT / "web" / "labels.json"
 
 
 def main() -> int:
@@ -94,7 +102,71 @@ def main() -> int:
 
     mb = OUT.stat().st_size / 1024 / 1024
     print(f"wrote {OUT.relative_to(S.ROOT)}  {mb:.1f} MB  z{MIN_ZOOM}-{MAX_ZOOM}")
+
+    write_labels()
     return 0
+
+
+def write_labels() -> None:
+    """Emit web/labels.json — place points plus highway shield anchors."""
+    import json
+
+    import geopandas as gpd
+
+    out: dict[str, list] = {"places": [], "shields": []}
+
+    # Reuse the print map's label nudges so the two maps agree about which
+    # side a label hangs from. The print offsets are metres; the web only
+    # needs the direction, since a pixel gap has to be zoom-independent.
+    places_cfg = S.load_config("places.yml")
+    hints = {}
+    for group in ("populated", "landforms"):
+        for p in places_cfg.get(group, []):
+            dx, dy = p.get("offset", (900, 700))
+            hints[p["name"]] = {
+                "anchor": p.get("anchor", "left"),
+                "below": dy < 0,
+            }
+
+    for name, kind in (("places", "town"), ("landforms", "pass")):
+        path = S.DERIVED_DIR / f"{name}.geojson"
+        if not path.exists():
+            continue
+        for _, r in gpd.read_file(path).to_crs(4326).iterrows():
+            h = hints.get(r["name"], {"anchor": "left", "below": False})
+            out["places"].append({
+                "name": r["name"],
+                "kind": kind,
+                "rank": int(r.get("rank", 2)),
+                "in_basin": bool(r.get("in_basin", True)),
+                "anchor": h["anchor"],
+                "below": h["below"],
+                "lon": round(r.geometry.x, 5),
+                "lat": round(r.geometry.y, 5),
+            })
+
+    hw_path = S.DERIVED_DIR / "highways.geojson"
+    if hw_path.exists():
+        # Same shield_at fractions the print map uses, so the two agree.
+        routes = {r["label"]: r.get("shield_at", 0.5)
+                  for r in S.load_config("places.yml").get("highways", [])}
+        hw = gpd.read_file(hw_path).to_crs("EPSG:26913")
+        for label, grp in hw.groupby("label"):
+            merged = grp.geometry.union_all()
+            geoms = list(getattr(merged, "geoms", [merged]))
+            longest = max(geoms, key=lambda g: g.length)
+            at = routes.get(label, 0.5)
+            for frac in ([at] if isinstance(at, (int, float)) else at):
+                pt = gpd.GeoSeries([longest.interpolate(frac, normalized=True)],
+                                   crs="EPSG:26913").to_crs(4326).iloc[0]
+                out["shields"].append({"label": label,
+                                       "lon": round(pt.x, 5),
+                                       "lat": round(pt.y, 5)})
+
+    LABELS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    LABELS_JSON.write_text(json.dumps(out, indent=1))
+    print(f"wrote {LABELS_JSON.relative_to(S.ROOT)}  "
+          f"{len(out['places'])} places, {len(out['shields'])} shields")
 
 
 if __name__ == "__main__":

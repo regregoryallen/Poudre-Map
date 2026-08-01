@@ -1,0 +1,136 @@
+{
+ "places": [
+  {
+   "name": "Loveland",
+   "kind": "town",
+   "rank": 1,
+   "in_basin": false,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.07499,
+   "lat": 40.39777
+  },
+  {
+   "name": "Greeley",
+   "kind": "town",
+   "rank": 1,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -104.70914,
+   "lat": 40.42332
+  },
+  {
+   "name": "Windsor",
+   "kind": "town",
+   "rank": 2,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -104.90137,
+   "lat": 40.47749
+  },
+  {
+   "name": "Timnath",
+   "kind": "town",
+   "rank": 3,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -104.98526,
+   "lat": 40.52916
+  },
+  {
+   "name": "Wellington",
+   "kind": "town",
+   "rank": 2,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.0086,
+   "lat": 40.70388
+  },
+  {
+   "name": "Fort Collins",
+   "kind": "town",
+   "rank": 1,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.08443,
+   "lat": 40.58527
+  },
+  {
+   "name": "Laporte",
+   "kind": "town",
+   "rank": 2,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.13805,
+   "lat": 40.62443
+  },
+  {
+   "name": "Bellvue",
+   "kind": "town",
+   "rank": 3,
+   "in_basin": true,
+   "anchor": "right",
+   "below": true,
+   "lon": -105.17166,
+   "lat": 40.62638
+  },
+  {
+   "name": "Rustic",
+   "kind": "town",
+   "rank": 2,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.58131,
+   "lat": 40.69929
+  },
+  {
+   "name": "Livermore",
+   "kind": "town",
+   "rank": 2,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.21721,
+   "lat": 40.79443
+  },
+  {
+   "name": "Red Feather Lakes",
+   "kind": "town",
+   "rank": 1,
+   "in_basin": true,
+   "anchor": "left",
+   "below": false,
+   "lon": -105.59167,
+   "lat": 40.80249
+  },
+  {
+   "name": "Cameron Pass",
+   "kind": "pass",
+   "rank": 1,
+   "in_basin": false,
+   "anchor": "left",
+   "below": true,
+   "lon": -105.89252,
+   "lat": 40.52082
+  }
+ ],
+ "shields": [
+  {
+   "label": "CO-14",
+   "lon": -105.7408,
+   "lat": 40.71237
+  },
+  {
+   "label": "I-25",
+   "lon": -105.00138,
+   "lat": 40.6282
+  }
+ ]
+}

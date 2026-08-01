@@ -1,5 +1,6 @@
 # Vector stack for fetch/build/tiles, raster stack for terrain, matplotlib for
-# the QA and comparison plots (and, later, render.py).
+# the QA, comparison and print-map plots. playwright drives the system Chrome
+# for src/webcheck.py — no browser download, use `channel="chrome"`.
 geopandas==1.1.4
 pyogrio==0.13.0
 pyproj==3.7.2
@@ -8,3 +9,4 @@ requests==2.34.2
 PyYAML==6.0.3
 rasterio==1.5.0
 matplotlib==3.11.1
+playwright==1.62.0

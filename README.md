@@ -66,6 +66,43 @@ Strahler-order threshold for stream density, and the Wyoming overlays. Hover
 reads out the subwatershed under the cursor; clicking any feature opens its
 attributes.
 
+A **?** button in the panel header opens a help sheet covering the controls,
+the acronyms (HUC, NHD, WBD, NLDI, Strahler order), and the sources.
+
+### Strahler order is not size
+
+Set the stream slider to 7 and the main Poudre disappears above the confluence
+while the North Fork stays. That is the data being correct, not an error.
+Strahler order counts *branching* — it increases only where two streams of the
+same order meet, so 3+3 makes 4 but 3+4 stays 4. The North Fork drains a broad,
+low-relief network of many small tributaries and accumulates order faster than
+the main stem's steep, confined canyon.
+
+Measured at the confluence:
+
+| | Strahler | drains |
+|---|---:|---:|
+| main stem, above | 6 | 1,229 km² |
+| North Fork, above | 7 | 1,435 km² |
+| main stem, below | 7 | 2,659 km² |
+
+The North Fork actually contributes slightly *more* land. The main stem is
+"main" because it carries the high-country snowmelt, not because it drains more
+ground. The viewer offers **drainage area** as an alternative thinning basis for
+exactly this reason — `totdasqkm` is closer to what people mean by "how big".
+
+### Verifying the viewer
+
+`make webcheck` drives the system Chrome headlessly and asserts the map drew —
+feature counts per source layer, the 53/7 HUC12 invariants, label and shield
+counts. Screenshots alone are not enough: MapLibre decodes tiles on worker
+threads, so a screenshot can show a bare basemap while the data is fine.
+
+One trap worth recording: headless Chrome needs
+`--use-gl=angle --use-angle=swiftshader`. Plain `--use-gl=swiftshader` fails
+with "Could not compile fragment shader" and the map renders *only* the
+basemap — which looks exactly like a data problem and is not one.
+
 Two things the viewer does that are worth not breaking:
 
 - **Hit-test layers stay visible at zero opacity.** `queryRenderedFeatures`
