@@ -1,7 +1,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: help venv vendor fetch build data qa terrain terrain-compare tiles serve deploy all clean-derived clean-cache clean-terrain
+.PHONY: help venv vendor fetch build data qa terrain terrain-compare render tiles serve deploy all clean-derived clean-cache clean-terrain
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -35,6 +35,9 @@ terrain: ## stage 2b — 3DEP → DEM + shading variants (windowed download, ~2 
 terrain-compare: ## side-by-side of the shading variants → out/terrain_variants.png
 	$(PY) -u src/terrain_compare.py
 
+render: ## stage 4 — the print map → out/poudre.png + .pdf
+	$(PY) -u src/render.py
+
 tiles: ## stage 3a — pack derived GeoJSON into web/poudre.pmtiles
 	$(PY) -u src/tiles.py
 
@@ -44,7 +47,7 @@ serve: ## local preview with range support, mounted like production
 deploy: ## rsync web/ to homeweb.lan/poudremap and verify
 	./deploy.sh
 
-all: data tiles ## rebuild everything from cache through tiles
+all: data terrain tiles render ## rebuild everything: data, terrain, tiles, print map
 
 clean-derived: ## drop derived output, keep the download cache
 	rm -rf data/derived/*

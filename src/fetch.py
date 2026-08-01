@@ -76,6 +76,81 @@ def fetch_nhd(cfg: dict, which: str, basin: gpd.GeoDataFrame) -> gpd.GeoDataFram
     )
 
 
+def _sql_in(values: list[str]) -> str:
+    return ", ".join("'" + v.replace("'", "''") + "'" for v in values)
+
+
+def fetch_gnis(cfg: dict, which: str) -> gpd.GeoDataFrame:
+    """Resolve the curated names in config/places.yml to GNIS coordinates.
+
+    Names are matched with county as a disambiguator — there are Lovelands in
+    several states, and passes on a county line appear once per county.
+    """
+    gnis = cfg["sources"]["gnis"]
+    places = S.load_config("places.yml")[which]
+    layer = S.Layer(gnis["base"], gnis["layers"][which], f"gnis_{which}")
+
+    names = sorted({p["name"] for p in places})
+    counties = sorted({p["county"] for p in places})
+    where = (f"gaz_name IN ({_sql_in(names)}) "
+             f"AND state_alpha='CO' AND county_name IN ({_sql_in(counties)})")
+
+    gdf = S.query(layer, where=where,
+                  out_fields="gaz_name,gaz_featureclass,state_alpha,county_name")
+    if gdf.empty:
+        return gdf
+
+    # A pass on a county line is listed once per county at identical
+    # coordinates; keep one.
+    gdf = gdf.drop_duplicates(subset=["gaz_name"], keep="first").copy()
+
+    ranks = {p["name"]: p.get("rank", 2) for p in places}
+    gdf["rank"] = gdf["gaz_name"].map(ranks).fillna(3).astype(int)
+    gdf = gdf.rename(columns={"gaz_name": "name",
+                              "gaz_featureclass": "featureclass"})
+
+    missing = sorted(set(names) - set(gdf["name"]))
+    if missing:
+        print(f"  {which}: NOT FOUND in GNIS — {', '.join(missing)}")
+    return gdf
+
+
+def fetch_highways(cfg: dict, basin: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """One TIGER query per route — they live in different layers."""
+    import pandas as pd
+
+    tiger = cfg["sources"]["tiger"]
+    routes = S.load_config("places.yml")["highways"]
+    bbox = _bbox_of(basin, pad=0.12)
+
+    frames = []
+    for r in routes:
+        layer = S.Layer(tiger["base"], r["layer"], f"tiger_{r['label']}")
+        gdf = S.query(layer, where=f"NAME = '{r['tiger_name']}'",
+                      out_fields="NAME,MTFCC", geometry=bbox)
+        if gdf.empty:
+            print(f"  {r['label']}: no segments returned")
+            continue
+        gdf["label"] = r["label"]
+        gdf["rank"] = r.get("rank", 2)
+        frames.append(gdf)
+
+    if not frames:
+        return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+    return gpd.GeoDataFrame(pd.concat(frames, ignore_index=True), crs="EPSG:4326")
+
+
+def fetch_states(cfg: dict) -> gpd.GeoDataFrame:
+    """State outlines for the print map's locator inset. Only worth having
+    because the basin straddles the CO/WY line — the inset is where that
+    becomes legible at a glance."""
+    base = ("https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb"
+            "/State_County/MapServer")
+    layer = S.Layer(base, 0, "states")
+    return S.query(layer, where="STUSAB IN ('CO','WY','NE','KS','UT','NM')",
+                   out_fields="STUSAB,NAME")
+
+
 def fetch_csu(cfg: dict, which: str) -> gpd.GeoDataFrame:
     csu = cfg["sources"]["csu"]
     service = csu["layers"][which]
@@ -93,6 +168,10 @@ JOBS: dict[str, object] = {
     "nhd_waterbodies": lambda cfg, ctx: fetch_nhd(cfg, "waterbodies", ctx["basin"]),
     "nhd_gages": lambda cfg, ctx: fetch_nhd(cfg, "gages", ctx["basin"]),
     "csu_canals": lambda cfg, ctx: fetch_csu(cfg, "canals"),
+    "gnis_populated": lambda cfg, ctx: fetch_gnis(cfg, "populated"),
+    "gnis_landforms": lambda cfg, ctx: fetch_gnis(cfg, "landforms"),
+    "highways": lambda cfg, ctx: fetch_highways(cfg, ctx["basin"]),
+    "states": lambda cfg, ctx: fetch_states(cfg),
 }
 
 
@@ -107,8 +186,9 @@ def main() -> int:
     ctx: dict[str, gpd.GeoDataFrame] = {}
     failures: list[str] = []
 
-    # The NHD jobs need the basin envelope; make sure it's loaded either way.
-    if any(j.startswith("nhd_") for j in wanted) and "basin" not in wanted:
+    # Jobs that need the basin envelope; make sure it's loaded either way.
+    needs_basin = [j for j in wanted if j.startswith("nhd_") or j == "highways"]
+    if needs_basin and "basin" not in wanted:
         if S.cache_path("basin").exists():
             ctx["basin"] = S.read_cache("basin")
         else:

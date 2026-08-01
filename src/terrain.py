@@ -54,8 +54,11 @@ S3 = ("https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/13/TIFF"
       "/current/{tile}/USGS_13_{tile}.tif")
 
 TARGET_CRS = "EPSG:26913"
-PAD_DEG = 0.08          # ~9 km of context beyond the basin
 DEFAULT_RES = 20.0      # metres; 11x17 at 300 dpi needs ~34 m, so this has room
+
+# Single source of truth for the map footprint, shared with build.py so the
+# raster and the clipped context vectors can't disagree about where the map ends.
+PAD_DEG = S.load_config()["map_extent"]["pad_deg"]
 
 # Conventional cartographic relief: sun in the upper left. Physically wrong for
 # the northern hemisphere, but inverting it makes ridges read as valleys.

@@ -177,6 +177,10 @@ def build(cfg: dict, simplify: float | None) -> int:
         "gages": "nhd_gages",
         "canals": "csu_canals",
         "nldi_basin": "nldi_basin",
+        "places": "gnis_populated",
+        "landforms": "gnis_landforms",
+        "highways": "highways",
+        "states": "states",
     }
 
     layers: dict[str, gpd.GeoDataFrame] = {}
@@ -201,6 +205,38 @@ def build(cfg: dict, simplify: float | None) -> int:
 
     if "flowlines" in layers:
         layers["flowlines"] = classify_flowlines(layers["flowlines"])
+
+    # --- context layers: clip to the map footprint, not the basin ----------
+    # Highways and places are context. CO-14 runs 354 km end to end and I-25
+    # spans the state; clipping them to the basin would cut CO-14 off at the
+    # watershed line halfway up the canyon. They get the map extent instead.
+    pad = cfg["map_extent"]["pad_deg"]
+    minx, miny, maxx, maxy = basin.total_bounds
+    extent = gpd.GeoDataFrame(
+        geometry=[box(minx - pad, miny - pad, maxx + pad, maxy + pad)],
+        crs=basin.crs,
+    )
+    for name in ("highways", "places", "landforms"):
+        if name not in layers:
+            continue
+        before = len(layers[name])
+        layers[name] = gpd.clip(layers[name], extent)
+        print(f"clip {name} to map extent: {before} → {len(layers[name])}")
+
+    # GNIS returns MultiPoint even for single-point features; renderers want
+    # a plain Point they can put a label next to.
+    for name in ("places", "landforms"):
+        if name in layers and not layers[name].empty:
+            layers[name] = layers[name].copy()
+            layers[name]["geometry"] = layers[name].geometry.representative_point()
+            # Flag what actually lies inside the watershed. Several of these
+            # sit outside on purpose (Loveland is Big Thompson, Cameron Pass
+            # drains west), and the map should be able to say so.
+            inside = layers[name].within(basin.geometry.union_all())
+            layers[name]["in_basin"] = inside
+            out = layers[name].loc[~inside, "name"].tolist()
+            if out:
+                print(f"  {name} outside the basin: {', '.join(sorted(out))}")
 
     # --- validate before writing anything ----------------------------------
     problems = validate(cfg, layers)

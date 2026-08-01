@@ -1,0 +1,47 @@
+# Curated label set for the print map.
+#
+# This file is editorial, not a data source. GNIS lists 142 "Populated Places"
+# inside the map extent and gives no way to rank them — Fort Collins and
+# "Bockman Lumber Camp" carry identical metadata — so the selection has to be
+# made by hand. Names here are resolved against GNIS at fetch time so the
+# coordinates stay authoritative rather than hand-typed.
+#
+# `rank` drives type size and which labels survive at smaller output sizes.
+#   1 = always labelled   2 = labelled when there is room   3 = context only
+#
+# `in_basin` is computed in build.py, not declared here. Several of these sit
+# outside the watershed on purpose: Loveland is in the Big Thompson basin and
+# Cameron Pass drains west to North Park, but both anchor where the Poudre sits
+# relative to its neighbours.
+
+populated:
+  # Plains — the irrigated country below the canyon mouth
+  - {name: Fort Collins,      county: Larimer, rank: 1}
+  - {name: Greeley,           county: Weld,    rank: 1}   # basin outlet
+  - {name: Loveland,          county: Larimer, rank: 1}   # Big Thompson basin
+  - {name: Wellington,        county: Larimer, rank: 2}
+  - {name: Windsor,           county: Weld,    rank: 2}
+  - {name: Timnath,           county: Larimer, rank: 3}
+  # Canyon mouth. These two sit 3 km apart and their labels collide, so
+  # Bellvue is thrown left and down. `offset` is metres in the map CRS;
+  # `anchor` is which side of the point the text hangs from.
+  - {name: Laporte,           county: Larimer, rank: 2, offset: [900, 900]}
+  - {name: Bellvue,           county: Larimer, rank: 3,
+     offset: [-900, -1600], anchor: right}
+  # Up the Poudre canyon, on CO-14
+  - {name: Rustic,            county: Larimer, rank: 2}
+  # North Fork country
+  - {name: Red Feather Lakes, county: Larimer, rank: 1}
+  - {name: Livermore,         county: Larimer, rank: 2}
+  # Virginia Dale is deliberately absent: it is not in any GNIS place layer,
+  # so there is no authoritative coordinate to resolve it against.
+
+landforms:
+  # Near the west edge of the map, so the label hangs right off the marker.
+  - {name: Cameron Pass,      county: Jackson, rank: 1, offset: [1200, -1400]}
+
+# TIGER/Line road names are literal and slightly odd — I-25 carries an internal
+# space. Query them exactly; `label` is what the map draws.
+highways:
+  - {label: "I-25",  tiger_name: "I- 25",        layer: 2, rank: 1}
+  - {label: "CO-14", tiger_name: "State Hwy 14", layer: 6, rank: 1}

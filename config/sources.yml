@@ -10,6 +10,13 @@ snapshot: 2026-07-31
 # reproject from here — the print path to EPSG:26913, the web path to 3857.
 canonical_crs: EPSG:4326
 
+# The print map's footprint: basin bounds grown by this much. Used by both
+# terrain.py (how much DEM to pull) and build.py (where to clip context layers
+# like highways, which run hundreds of km past the basin). One value so the
+# raster and the vectors can't disagree about where the map ends.
+map_extent:
+  pad_deg: 0.08   # ~9 km
+
 # The subject of the map. Note states: CO,WY — the basin crosses the state
 # line in the North Fork headwaters. Any clip to Colorado is wrong.
 basin:
@@ -70,6 +77,27 @@ sources:
   elevation:
     dataset: 3DEP 1/3 arc-second
     attribution: USGS 3DEP
+
+  # USGS GNIS, for place-name coordinates. Layer 3 holds every populated place
+  # including the incorporated cities — layers 1 and 2 look like the right
+  # place for Fort Collins and return nothing. Layer 5 (Landforms) carries
+  # passes, coded featureclass "Gap".
+  #
+  # GNIS has no population attribute, so which places appear is decided in
+  # config/places.yml; this source only resolves the names to coordinates.
+  gnis:
+    base: https://carto.nationalmap.gov/arcgis/rest/services/geonames/MapServer
+    layers:
+      populated: 3
+      landforms: 5
+    attribution: USGS Geographic Names Information System
+
+  # Census TIGER/Line roads. Primary Roads (layer 2) carries the interstates;
+  # the state highways live in the secondary layers, of which 6 is the finest
+  # — worth having, since CO-14 through the Poudre canyon is very sinuous.
+  tiger:
+    base: https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer
+    attribution: US Census Bureau TIGER/Line
 
   # CSU Geospatial Centroid, ArcGIS org KNdRU5cN6ENqCTjk, owner nvogel1_CSUrams.
   # Public, EPSG:26913. Valued for the curated local layers, NOT for the

@@ -47,7 +47,7 @@ Three stages. The first two are shared; only rendering diverges.
 | `tiles.py` | `tippecanoe` → single static vector-tile file. | `web/poudre.pmtiles` | done |
 | `web/index.html` | MapLibre viewer. No build step, no framework. | — | done |
 | `terrain.py` | 3DEP → DEM + shading variants, EPSG:26913. | `data/terrain/*.tif` | done |
-| `render.py` | Static cartography in EPSG:26913. | PNG / PDF / SVG | todo |
+| `render.py` | The print map, EPSG:26913, 17×11 at 300 dpi. | `out/poudre.png` / `.pdf` | done |
 
 ```bash
 make venv && make data && make tiles && make serve
@@ -140,6 +140,32 @@ coexist with:
 | `hillshade` | Strongest contrast. Fights thin overlaid linework. |
 | `hillshade_multi` | Softer, holds detail on all aspects. Best under vectors. |
 | `hypsometric` | Only variant that gives the plains an identity. Best standalone. |
+
+## The print map
+
+`make render` → `out/poudre.png` and `.pdf`, 17×11 landscape at 300 dpi, on the
+hypsometric base. The basin is roughly 1.1:1, so a full-bleed sheet would either
+crop it or leave dead margins; the layout is a near-square map with a side
+column instead.
+
+Labels are placed from `config/places.yml`, not by a solver. Matplotlib has no
+collision avoidance, and for a fixed set of a dozen labels an explicit `offset`
+in metres beats a solver you have to argue with. Bellvue and Laporte sit 3 km
+apart and overlap by default, so Bellvue is thrown left and down.
+
+Place names come from a curated list rather than a bbox query, because GNIS
+lists 142 populated places inside the map extent and gives no way to rank them
+— Fort Collins and "Bockman Lumber Camp" carry identical metadata. Names in
+config are resolved against GNIS at fetch time so the coordinates stay
+authoritative rather than hand-typed.
+
+Loveland and Cameron Pass sit outside the watershed on purpose (Big Thompson
+basin and the west side of the Divide respectively). `build.py` computes an
+`in_basin` flag and the map distinguishes them: filled marker inside, hollow
+and italic outside.
+
+The locator inset earns its space because the basin straddles the CO/WY line,
+which is hard to read at map scale and obvious at state scale.
 
 ## Canals are not streams
 
