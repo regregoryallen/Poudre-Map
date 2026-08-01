@@ -42,6 +42,13 @@ landforms:
 
 # TIGER/Line road names are literal and slightly odd — I-25 carries an internal
 # space. Query them exactly; `label` is what the map draws.
+#
+# `shield_at` is where the route marker goes, as a fraction along the longest
+# contiguous run of the route. Give it a list for repeated shields on a long
+# route. The default of 0.5 put CO-14's shield 3.6 km from Rustic and the two
+# labels collided; 0.3 moves it up-canyon to about 13.6 km clear.
 highways:
-  - {label: "I-25",  tiger_name: "I- 25",        layer: 2, rank: 1}
-  - {label: "CO-14", tiger_name: "State Hwy 14", layer: 6, rank: 1}
+  - {label: "I-25",  tiger_name: "I- 25",        layer: 2, rank: 1,
+     shield_at: 0.5}
+  - {label: "CO-14", tiger_name: "State Hwy 14", layer: 6, rank: 1,
+     shield_at: 0.3}

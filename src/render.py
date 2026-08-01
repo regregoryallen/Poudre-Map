@@ -56,6 +56,15 @@ def place_offsets() -> dict[str, tuple[float, float, str]]:
     return out
 
 
+def shield_positions() -> dict[str, list[float]]:
+    """Where each route's shield goes, as fractions along its longest run."""
+    out: dict[str, list[float]] = {}
+    for r in S.load_config("places.yml").get("highways", []):
+        at = r.get("shield_at", 0.5)
+        out[r["label"]] = [at] if isinstance(at, (int, float)) else list(at)
+    return out
+
+
 def load(name: str) -> gpd.GeoDataFrame | None:
     p = S.DERIVED_DIR / f"{name}.geojson"
     if not p.exists():
@@ -165,16 +174,22 @@ def draw_map(ax, cfg, args, layers, extent):
             zorder=9, path_effects=halo(2.4))
 
     # --- highway shields --------------------------------------------------
+    # Position comes from shield_at in config/places.yml — a fraction along the
+    # route's longest contiguous run, or a list for repeated shields. Hardcoding
+    # the midpoint dropped CO-14's shield on top of Rustic.
     if hw is not None:
+        shields = shield_positions()
         for label, grp in hw.groupby("label"):
             merged = grp.geometry.union_all()
             geoms = list(getattr(merged, "geoms", [merged]))
             longest = max(geoms, key=lambda g: g.length)
-            pt = longest.interpolate(0.5, normalized=True)
-            ax.text(pt.x, pt.y, label, fontsize=8, weight="bold",
-                    color="#27272a", ha="center", va="center", zorder=20,
-                    bbox=dict(boxstyle="round,pad=0.28", facecolor="#fafaf9",
-                              edgecolor="#3f3f46", linewidth=0.9))
+            for frac in shields.get(label, [0.5]):
+                pt = longest.interpolate(frac, normalized=True)
+                ax.text(pt.x, pt.y, label, fontsize=8, weight="bold",
+                        color="#27272a", ha="center", va="center", zorder=20,
+                        bbox=dict(boxstyle="round,pad=0.28",
+                                  facecolor="#fafaf9", edgecolor="#3f3f46",
+                                  linewidth=0.9))
 
     # --- places -----------------------------------------------------------
     # Label placement is config-driven rather than automatic: matplotlib has no

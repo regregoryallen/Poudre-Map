@@ -148,10 +148,26 @@ hypsometric base. The basin is roughly 1.1:1, so a full-bleed sheet would either
 crop it or leave dead margins; the layout is a near-square map with a side
 column instead.
 
-Labels are placed from `config/places.yml`, not by a solver. Matplotlib has no
-collision avoidance, and for a fixed set of a dozen labels an explicit `offset`
-in metres beats a solver you have to argue with. Bellvue and Laporte sit 3 km
-apart and overlap by default, so Bellvue is thrown left and down.
+### Moving labels
+
+All label placement is in `config/places.yml` — no code change needed.
+Matplotlib has no collision avoidance, and for a fixed set of a dozen labels an
+explicit offset beats a solver you have to argue with.
+
+| Key | Applies to | Meaning |
+|---|---|---|
+| `offset: [dx, dy]` | places, landforms | Nudge from the marker, in **metres** (map CRS). Default `[900, 700]`. |
+| `anchor: left \| right` | places, landforms | Which side of the point the text hangs from. Default `left`. |
+| `rank: 1 \| 2 \| 3` | places, landforms | Type size and marker size. |
+| `shield_at: 0.3` | highways | Fraction along the route's longest run. A list gives repeated shields. |
+
+Two collisions have been resolved this way and are worth knowing about as
+examples. Bellvue and Laporte sit 3 km apart and overlap by default, so Bellvue
+is thrown left and down. CO-14's shield defaulted to the route midpoint, which
+landed 3.6 km from Rustic; `shield_at: 0.3` moves it up-canyon to 13.6 km clear.
+
+To check clearances before re-rendering, `src/render.py` exposes
+`shield_positions()` and `place_offsets()` — both read straight from config.
 
 Place names come from a curated list rather than a bbox query, because GNIS
 lists 142 populated places inside the map extent and gives no way to rank them
