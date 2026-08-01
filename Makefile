@@ -1,7 +1,7 @@
 PY := .venv/bin/python
 PIP := .venv/bin/pip
 
-.PHONY: help venv vendor fetch build data qa terrain terrain-compare render tiles serve webcheck deploy all clean-derived clean-cache clean-terrain
+.PHONY: help venv vendor fetch build data qa terrain terrain-compare render tiles serve webcheck webcheck-url deploy deploy-public all clean-derived clean-cache clean-terrain
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -44,11 +44,17 @@ tiles: ## stage 3a — pack derived GeoJSON into web/poudre.pmtiles
 serve: ## local preview with range support, mounted like production
 	$(PY) src/devserve.py --mount /poudremap
 
-webcheck: ## headless check that the viewer actually draws (needs dev server)
+webcheck: ## headless check that the viewer draws (needs dev server)
 	$(PY) -u src/webcheck.py --shot out/web.png
 
-deploy: ## rsync web/ to homeweb.lan/poudremap and verify
-	./deploy.sh
+webcheck-url: ## same check against a deployed URL: make webcheck-url URL=...
+	$(PY) -u src/webcheck.py --url "$(URL)"
+
+deploy: ## deploy to homeweb.lan/poudremap and verify
+	./deploy.sh lan
+
+deploy-public: ## deploy to www.gregory-allen.com/poudreweb and verify
+	./deploy.sh public
 
 all: data terrain tiles render ## rebuild everything: data, terrain, tiles, print map
 

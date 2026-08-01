@@ -58,7 +58,33 @@ Current derived output: 1 basin polygon, 10 HUC10s, 53 HUC12s, 13,016 flowlines
 
 ## Viewer
 
-Deployed to **http://homeweb.lan/poudremap/** via `./deploy.sh`.
+Two deploy targets:
+
+| | URL | `make` |
+|---|---|---|
+| LAN | http://homeweb.lan/poudremap/ | `make deploy` |
+| Public | https://www.gregory-allen.com/poudreweb/ | `make deploy-public` |
+
+Only `web/` is deployed, and `--delete` is guarded so it can only prune inside
+the app's own directory. Both hosts serve a *shared* docroot with other sites
+in it, so a typo'd path with `--delete` would be destructive well beyond this
+project.
+
+The public host is HostGator shared hosting (SSH on port 2222) running
+WordPress at the docroot. Real files pass through WordPress's rewrite untouched
+(`RewriteCond !-f`), and range requests return 206, so PMTiles streams
+correctly — both verified after every deploy by `deploy.sh`.
+
+`~/public_html` is the docroot for **gregory-allen.com, www.gregory-allen.com
+and reederweb.com alike** — all three serve the same tree. The per-domain
+subdirectories under `public_html` look like addon-domain docroots and are not;
+cPanel's userdata lists stale entries for them. Verified empirically rather than
+from config. The apex redirects to itself, so `www.` is the canonical form.
+
+`web/.htaccess` declares a MIME type for `.pmtiles` and shortens the cache on
+the HTML and tiles, since the site-wide WordPress `.htaccess` sets a 6-hour
+default that would serve a stale viewer against fresh tiles. Caddy ignores it,
+so it is harmless on the LAN target.
 
 Runtime controls: base layer (Esri hillshade, USGS Topo, USGS Imagery, OSM,
 none), subdivision tier (basin / HUC10 / HUC12), hydrography toggles, a

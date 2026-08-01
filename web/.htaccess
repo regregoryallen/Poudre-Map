@@ -1,0 +1,47 @@
+# Apache config for the public deployment. Caddy ignores this, so it is
+# harmless on the LAN target.
+#
+# The public host runs WordPress at the docroot, whose .htaccess sets
+# ExpiresDefault "access plus 6 hours" and rewrites anything that is not a
+# real file to index.php. Real files pass through the rewrite untouched
+# (RewriteCond !-f), so the map is served directly — but the caching defaults
+# and the unregistered .pmtiles extension both need saying explicitly.
+
+# .pmtiles has no registered MIME type. The reader works on raw bytes, so the
+# value matters less than Apache having one at all.
+<IfModule mod_mime.c>
+  AddType application/octet-stream .pmtiles
+  AddType application/json .json
+</IfModule>
+
+# PMTiles is read entirely through Range requests. Apache does this for static
+# files by default; stated here so it survives a host config change.
+<IfModule mod_headers.c>
+  Header set Accept-Ranges bytes
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  # The page itself changes with every deploy — don't let a 6-hour default
+  # serve a stale viewer against fresh tiles.
+  ExpiresByType text/html "access plus 5 minutes"
+  ExpiresByType application/json "access plus 1 hour"
+  # Vendored libraries are version-pinned in the filename's absence by being
+  # replaced wholesale on deploy; an hour is a reasonable compromise.
+  ExpiresByType text/javascript "access plus 1 hour"
+  ExpiresByType text/css "access plus 1 hour"
+</IfModule>
+
+<IfModule mod_headers.c>
+  <FilesMatch "\.pmtiles$">
+    # Tiles are large and change only on rebuild. Revalidate rather than
+    # trusting a long TTL, so a redeploy is picked up without a hard refresh.
+    Header set Cache-Control "public, max-age=300, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "public, max-age=300, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# No directory listings — index.html or nothing.
+Options -Indexes
